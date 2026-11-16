@@ -3,7 +3,6 @@ import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createServer as createViteServer } from 'vite';
 import { getCrops, getLocations, getMandis } from './server/services/dataStore.js';
 import { recommendCrops } from './server/services/recommendationEngine.js';
 import { analyzeMarketIntelligence } from './server/services/predictionEngine.js';
@@ -24,8 +23,7 @@ import {
 } from './server/services/authService.js';
 import { askAgriBot } from './server/services/geminiService.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = import.meta.url ? path.dirname(fileURLToPath(import.meta.url)) : process.cwd();
 
 function getErrStatus(err: unknown): number {
   if (typeof err === 'object' && err !== null && 'status' in err) {
@@ -382,6 +380,10 @@ export async function createApp(options: { enableVite?: boolean; serveStatic?: b
   });
 
   if (enableVite) {
+    // Load Vite lazily via a non-literal specifier so serverless bundlers
+    // never try to include Vite (a dev-only tool) in the function bundle.
+    const viteModule = 'vite';
+    const { createServer: createViteServer } = await import(viteModule);
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -410,6 +412,11 @@ async function startServer() {
   });
 }
 
-if (process.env.NETLIFY !== 'true') {
+const isServerless =
+  process.env.NETLIFY === 'true' ||
+  Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME) ||
+  Boolean(process.env.LAMBDA_TASK_ROOT);
+
+if (!isServerless) {
   startServer();
 }

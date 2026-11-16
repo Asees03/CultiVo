@@ -2,9 +2,21 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const DATA_DIR = path.resolve(__dirname, '../data');
+// Resolve the data directory both locally and inside a bundled Netlify
+// Function, where the module's own location differs from the source tree.
+function resolveDataDir() {
+  const candidates = [];
+  if (import.meta.url) {
+    candidates.push(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../data'));
+  }
+  candidates.push(path.resolve(process.cwd(), 'server/data'));
+  if (process.env.LAMBDA_TASK_ROOT) {
+    candidates.push(path.resolve(process.env.LAMBDA_TASK_ROOT, 'server/data'));
+  }
+  return candidates.find((dir) => fs.existsSync(path.join(dir, 'crops.json'))) || candidates[0];
+}
+
+const DATA_DIR = resolveDataDir();
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
 function readJson(filename) {
